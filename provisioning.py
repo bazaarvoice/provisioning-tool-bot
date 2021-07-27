@@ -219,7 +219,6 @@ def downloadConfig(config):
 
 # Function to process all the data that is parsed into config file
 def processData():
-    print("Pateko i processData")
     localeSplit = locale.split("&")
     print(locale)
     i = 1
@@ -228,7 +227,6 @@ def processData():
         print ("Appending " + localeSplit[i] + " settings")
         config = getConfig(localeSplit[i])
         if downloadConfig(config):
-            print("pateko i downloadConfig ifa")
             appendNewDataCV2(localeSplit[i], config)
             uploadConfig(config)
             if localeSplit[i] in ["en_GB","en_US", "de_DE", "fr_FR"]:
