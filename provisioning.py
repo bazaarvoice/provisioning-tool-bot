@@ -13,8 +13,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 
-ldap_name  = 'LDAP NAME'
-ldap_pwd  = 'LDAP PWD'
+ldap_name  = ''
+ldap_pwd  = ''
 passkey = 'Xlf8G5108wADIS43a5irWi0y51Kv8Ph3' # for ICEBREAKER API
 
 # locale lists of strings
@@ -110,11 +110,14 @@ def tryItSampling(locale):
         element = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, '//*[@id="item-list"]/tbody/tr/td[2]/a')))
         driver.execute_script('arguments[0].click();',element)
         vendorId = driver.current_url.split("/")[6]
-        #updateRosetta(locale, clientName, vendorId)
         element = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, "//input[@value='"+clientName+"']")))
         driver.execute_script('arguments[0].click();',element)
         element = WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.XPATH, '//*[@id="register_form"]/article[2]/section/div/div/button')))
         driver.execute_script('arguments[0].click();',element)
+        #main call
+        checkRosetta(locale, clientName, vendorId)
+        #test call
+        #checkRosetta("en_US", "oogie", "48889")
         driver.close()
         flag = True
     finally:
@@ -122,36 +125,56 @@ def tryItSampling(locale):
 
 
 #Update instances for vendors in rosetta
-def updateRosetta(locale, clientName, vendorID):
+def checkRosetta(locale, clientName, vendorID):
     print('VendorID: "'+vendorID+'"')
     tryItLocale = getTryIt(locale)
-    url = "https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/record/1/clients/"+clientName+"/services/sampling"
-    #url = 'https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/scan/2/record/clients?q=services.sampling.active:boolean(true)&q=services.sampling.data.portals.client:samsclub&q=services.sampling.data.portals.brandId:6864&key=services.sampling.data&key=instanceName'
+    checkUrl = "https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/scan/2/record/clients?q=services.sampling.active:boolean(true)&q=services.sampling.data.portals.client:"+tryItLocale+"&q=services.sampling.data.portals.brandId:"+vendorID+"&q=instanceName:"+clientName+"&key=services.sampling.data&key=instanceName"
+    checkRosetta = requests.get(checkUrl)
+    print("Checking rosetta...")
+    print(checkRosetta.status_code)
+    if len(checkRosetta.json()) == 0:
+        print("No data, moving forward")
+        updateRosetta(tryItLocale, clientName, vendorID)
+    else:
+        print("Data exists, skipping")
+        #line below for testing, remove after
+        #updateRosetta(tryItLocale, clientName, vendorID)
+
+def updateRosetta(locale, clientName, vendorID):
+    print("Starting to update rosetta...")
+    url = "https://rosetta.prod.us-east-1.nexus.bazaarvoice.com/record/1/clients/"+clientName+"/services/sampling?apiKey=2830e633-8801-11eb-904b-0a58a9feac2a"
     print(url)
-    #headers = {'content-type': 'application/json', 'X-Auth-Version': 2, 'X-Auth-Timestamp': '2021-04-01T12:59:24.064Z', 'X-Auth-Signature': }
-    headers = {'content-type': 'application/json', 'X-Auth-Version': '3'}
-    print("headeriai aprasyti")
+    #headers = {'content-type': 'application/json', 'X-Auth-Version': '2'}
+    headers = {'content-type': 'application/json', 'X-Auth-Version': '2', 'X-Auth-Timestamp': '2021-07-27T15:30:05.055Z', 'X-Auth-Signature': 'DSNT3_4ogsv9oixVnIa44XI60cyyGUD9-hhnyVTkcJg='}
+    print("headers defined")
     putObj = {
         "active": True,
-        "portals": [{
-            "samplingVersion": 1,
-            "brandId": vendorID,
-            "client": tryItLocale
-        }]
+        "data": {
+            "portals": [{
+                "samplingVersion": 1,
+                "brandId": vendorID,
+                "client": locale
+            }]
+        }
     }
-    print("putObj aprasytas")
-    rosettaUpdate = requests.put(url, data=json.dumps(putObj), headers=headers, auth=HmacAuth('2830e633-8801-11eb-904b-0a58a9feac2a', 'KB4jqbOl73DJ8rcpeiSy4Q'))
-    #rosettaUpdate = requests.get(url)
-    print("requestas")
+    json_dump = json.dumps(putObj)
+    rosettaUpdate = requests.put(url, headers=headers, data=json_dump)
+
+    print("Making request...")
     if rosettaUpdate.status_code == requests.codes.ok:
         print('Rosetta updated')
     else:
         print('Rosetta failed to Update')
         print(rosettaUpdate.status_code)
+        rosettaUpdate.raise_for_status()
 
 
 # Function to run CMD command to upload new file
 def uploadConfig(config):
+    print("upload config")
+    print(config)
+    print(clientName)
+    print("end upload config")
     upload = 'goldrush-config -c '+config+' -e production -u '+config+'_config.json -n "'+clientName+': uploaded by bot."'
     os.system(upload)
 
@@ -196,13 +219,16 @@ def downloadConfig(config):
 
 # Function to process all the data that is parsed into config file
 def processData():
+    print("Pateko i processData")
     localeSplit = locale.split("&")
+    print(locale)
     i = 1
     ok = True
     while i < len(localeSplit): 
         print ("Appending " + localeSplit[i] + " settings")
         config = getConfig(localeSplit[i])
         if downloadConfig(config):
+            print("pateko i downloadConfig ifa")
             appendNewDataCV2(localeSplit[i], config)
             uploadConfig(config)
             if localeSplit[i] in ["en_GB","en_US", "de_DE", "fr_FR"]:
